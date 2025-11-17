@@ -1,0 +1,52 @@
+#!/bin/sh /etc/rc.common
+
+START=95
+STOP=10
+
+SERVICE_PIDFILE=/var/run/wan_status_led.pid
+LED_PATH="/sys/class/leds/wan_led/brightness"
+PING_TARGET="8.8.8.8"
+INTERVAL=10
+
+start() {
+    echo "Starting WAN LED monitor..."
+
+    # Prevent multiple instances
+    if [ -f "$SERVICE_PIDFILE" ] && kill -0 "$(cat $SERVICE_PIDFILE)" 2>/dev/null; then
+        echo "Service already running."
+        return 1
+    fi
+
+    (
+        while :; do
+            if ping -q -c 1 -W 1 "$PING_TARGET" >/dev/null 2>&1; then
+                echo 255 > "$LED_PATH"
+            else
+                echo 0 > "$LED_PATH"
+            fi
+            sleep "$INTERVAL"
+        done
+    ) &
+
+    echo $! > "$SERVICE_PIDFILE"
+    echo "WAN LED monitor started."
+}
+
+stop() {
+    echo "Stopping WAN LED monitor..."
+
+    if [ -f "$SERVICE_PIDFILE" ]; then
+        PID=$(cat "$SERVICE_PIDFILE")
+        if kill -0 "$PID" 2>/dev/null; then
+            kill "$PID"
+            sleep 1
+            rm -f "$SERVICE_PIDFILE"
+            echo "Stopped."
+            return 0
+        fi
+    fi
+
+    echo "Not running."
+    return 1
+}
+
